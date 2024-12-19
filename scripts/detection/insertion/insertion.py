@@ -11,6 +11,7 @@ import requests
 import multiprocessing
 
 from web3 import Web3
+from web3.providers.legacy_websocket import LegacyWebSocketProvider
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -73,15 +74,15 @@ def analyze_block(block_number):
             event["address"].lower() != "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
             and event["address"].lower() != "0xc0829421c1d260bd3cb3e0f06cfe2d52db2ce315"
         ):
-
-            if event["data"].replace("0x", "") and len(event["topics"]) == 3:
-                _from = Web3.toChecksumAddress(
+            event_data = event["data"].hex().replace("0x", "")
+            if event_data and len(event["topics"]) == 3:
+                _from = w3.to_checksum_address(
                     "0x" + event["topics"][1].hex().replace("0x", "")[24:64]
                 )
-                _to = Web3.toChecksumAddress(
+                _to = w3.to_checksum_address(
                     "0x" + event["topics"][2].hex().replace("0x", "")[24:64]
                 )
-                _value = int(event["data"].replace("0x", "")[0:64], 16)
+                _value = int(event_data[0:64], 16)
 
                 if _value > 0 and _from != _to:
                     if (
@@ -94,21 +95,21 @@ def analyze_block(block_number):
                         event_a1 = transfer_to[event["address"] + _from]
                         event_a2 = event
 
-                        _from_a1 = Web3.toChecksumAddress(
+                        _from_a1 = w3.to_checksum_address(
                             "0x" + event_a1["topics"][1].hex().replace("0x", "")[24:64]
                         )
-                        _to_a1 = Web3.toChecksumAddress(
+                        _to_a1 = w3.to_checksum_address(
                             "0x" + event_a1["topics"][2].hex().replace("0x", "")[24:64]
                         )
-                        _value_a1 = int(event_a1["data"].replace("0x", "")[0:64], 16)
+                        _value_a1 = int(event_a1["data"].hex()[0:64], 16)
 
-                        _from_a2 = Web3.toChecksumAddress(
+                        _from_a2 = w3.to_checksum_address(
                             "0x" + event_a2["topics"][1].hex().replace("0x", "")[24:64]
                         )
-                        _to_a2 = Web3.toChecksumAddress(
+                        _to_a2 = w3.to_checksum_address(
                             "0x" + event_a2["topics"][2].hex().replace("0x", "")[24:64]
                         )
-                        _value_a2 = int(event_a2["data"].replace("0x", "")[0:64], 16)
+                        _value_a2 = int(event_a2["data"].hex()[0:64], 16)
 
                         delta = abs(_value_a2 - _value_a1) / max(_value_a2, _value_a1)
                         if delta <= TOKEN_AMOUNT_DELTA:
@@ -127,21 +128,20 @@ def analyze_block(block_number):
                                     not in attackers
                                 ):
 
-                                    _from_w = Web3.toChecksumAddress(
+                                    _from_w = w3.to_checksum_address(
                                         "0x"
                                         + asset_transfer["topics"][1]
                                         .hex()
                                         .replace("0x", "")[24:64]
                                     )
-                                    _to_w = Web3.toChecksumAddress(
+                                    _to_w = w3.to_checksum_address(
                                         "0x"
                                         + asset_transfer["topics"][2]
                                         .hex()
                                         .replace("0x", "")[24:64]
                                     )
                                     _value_w = int(
-                                        asset_transfer["data"].replace("0x", "")[0:64],
-                                        16,
+                                        asset_transfer["data"].hex()[0:64], 16
                                     )
 
                                     if (
@@ -158,29 +158,27 @@ def analyze_block(block_number):
                                     event_a1["transactionHash"].hex() not in whales
                                     and event_a2["transactionHash"].hex() not in whales
                                 ):
-                                    _from_w = Web3.toChecksumAddress(
+                                    _from_w = w3.to_checksum_address(
                                         "0x"
                                         + event_w["topics"][1]
                                         .hex()
                                         .replace("0x", "")[24:64]
                                     )
-                                    _to_w = Web3.toChecksumAddress(
+                                    _to_w = w3.to_checksum_address(
                                         "0x"
                                         + event_w["topics"][2]
                                         .hex()
                                         .replace("0x", "")[24:64]
                                     )
-                                    _value_w = int(
-                                        event_w["data"].replace("0x", "")[0:64], 16
-                                    )
+                                    _value_w = int(event_w["data"].hex()[0:64], 16)
 
-                                    tx1 = w3.eth.getTransaction(
+                                    tx1 = w3.eth.get_transaction(
                                         event_a1["transactionHash"]
                                     )
-                                    whale_tx = w3.eth.getTransaction(
+                                    whale_tx = w3.eth.get_transaction(
                                         event_w["transactionHash"]
                                     )
-                                    tx2 = w3.eth.getTransaction(
+                                    tx2 = w3.eth.get_transaction(
                                         event_a2["transactionHash"]
                                     )
 
@@ -254,7 +252,7 @@ def analyze_block(block_number):
                                                 token_name = token_address
 
                                         # Get exchange address and name
-                                        exchange_address = Web3.toChecksumAddress(
+                                        exchange_address = w3.to_checksum_address(
                                             "0x"
                                             + event_w["topics"][1]
                                             .hex()
@@ -373,11 +371,11 @@ def analyze_block(block_number):
                                         if not exchange_name:
                                             exchange_name = exchange_address
 
-                                        receipt1 = w3.eth.getTransactionReceipt(
+                                        receipt1 = w3.eth.get_transaction_receipt(
                                             tx1["hash"]
                                         )
                                         cost1 = receipt1["gasUsed"] * tx1["gasPrice"]
-                                        receipt2 = w3.eth.getTransactionReceipt(
+                                        receipt2 = w3.eth.get_transaction_receipt(
                                             tx2["hash"]
                                         )
                                         cost2 = receipt2["gasUsed"] * tx2["gasPrice"]
@@ -490,14 +488,16 @@ def analyze_block(block_number):
                                                     and whale_event
                                                 ):
                                                     break
+                                            tst1 = "0x" + tx1_event["topics"][0].hex()
+                                            print(tst1 == TOKEN_PURCHASE)
                                             if (
                                                 tx1_event
                                                 and tx2_event
                                                 and tx1_event["address"]
                                                 == tx2_event["address"]
-                                                and tx1_event["topics"][0].hex()
+                                                and "0x" + tx1_event["topics"][0].hex()
                                                 == TOKEN_PURCHASE
-                                                and tx2_event["topics"][0].hex()
+                                                and "0x" + tx2_event["topics"][0].hex()
                                                 == ETH_PURCHASE
                                             ):
                                                 eth_spent = int(
@@ -574,27 +574,31 @@ def analyze_block(block_number):
 
                                             print(
                                                 "Cost: "
-                                                + str(Web3.fromWei(total_cost, "ether"))
+                                                + str(
+                                                    Web3.from_wei(total_cost, "ether")
+                                                )
                                                 + " ETH"
                                             )
 
                                             if gain > 0:
                                                 print(
                                                     "Gain: "
-                                                    + str(Web3.fromWei(gain, "ether"))
+                                                    + str(Web3.from_wei(gain, "ether"))
                                                     + " ETH"
                                                 )
                                             else:
                                                 print(
                                                     "Gain: -"
                                                     + str(
-                                                        Web3.fromWei(abs(gain), "ether")
+                                                        Web3.from_wei(
+                                                            abs(gain), "ether"
+                                                        )
                                                     )
                                                     + " ETH"
                                                 )
 
                                             profit = gain - total_cost
-                                            block = w3.eth.getBlock(block_number)
+                                            block = w3.eth.get_block(block_number)
                                             one_eth_to_usd_price = decimal.Decimal(
                                                 float(
                                                     get_one_eth_to_usd(
@@ -604,13 +608,15 @@ def analyze_block(block_number):
                                             )
                                             if profit >= 0:
                                                 profit_usd = (
-                                                    Web3.fromWei(profit, "ether")
+                                                    Web3.from_wei(profit, "ether")
                                                     * one_eth_to_usd_price
                                                 )
                                                 print(
                                                     colors.OK
                                                     + "Profit: "
-                                                    + str(Web3.fromWei(profit, "ether"))
+                                                    + str(
+                                                        Web3.from_wei(profit, "ether")
+                                                    )
                                                     + " ETH ("
                                                     + str(profit_usd)
                                                     + " USD)"
@@ -618,14 +624,14 @@ def analyze_block(block_number):
                                                 )
                                             else:
                                                 profit_usd = (
-                                                    -Web3.fromWei(abs(profit), "ether")
+                                                    -Web3.from_wei(abs(profit), "ether")
                                                     * one_eth_to_usd_price
                                                 )
                                                 print(
                                                     colors.FAIL
                                                     + "Profit: -"
                                                     + str(
-                                                        Web3.fromWei(
+                                                        Web3.from_wei(
                                                             abs(profit), "ether"
                                                         )
                                                     )
@@ -664,14 +670,16 @@ def analyze_block(block_number):
                                             tx2["hash"] = tx2["hash"].hex()
 
                                             if gain >= 0:
-                                                gain = Web3.fromWei(gain, "ether")
+                                                gain = Web3.from_wei(gain, "ether")
                                             else:
-                                                gain = -Web3.fromWei(abs(gain), "ether")
+                                                gain = -Web3.from_wei(
+                                                    abs(gain), "ether"
+                                                )
 
                                             if profit >= 0:
-                                                profit = Web3.fromWei(profit, "ether")
+                                                profit = Web3.from_wei(profit, "ether")
                                             else:
-                                                profit = -Web3.fromWei(
+                                                profit = -Web3.from_wei(
                                                     abs(profit), "ether"
                                                 )
 
@@ -712,10 +720,10 @@ def analyze_block(block_number):
                                                     one_eth_to_usd_price
                                                 ),
                                                 "cost_eth": float(
-                                                    Web3.fromWei(total_cost, "ether")
+                                                    Web3.from_wei(total_cost, "ether")
                                                 ),
                                                 "cost_usd": float(
-                                                    Web3.fromWei(total_cost, "ether")
+                                                    Web3.from_wei(total_cost, "ether")
                                                     * one_eth_to_usd_price
                                                 ),
                                                 "gain_eth": float(gain),
@@ -824,9 +832,9 @@ def init_process(_prices):
     global prices
     global mongo_connection
 
-    w3 = Web3(Web3.WebsocketProvider(WEB3_WS_PROVIDER))
-    if w3.isConnected():
-        print("Connected worker to " + w3.clientVersion)
+    w3 = Web3(LegacyWebSocketProvider(WEB3_WS_PROVIDER))
+    if w3.provider.is_connected:
+        print("Connected worker to " + w3.client_version)
     else:
         print(
             colors.FAIL + "Error: Could not connect to " + WEB3_WS_PROVIDER + colors.END
@@ -881,7 +889,7 @@ def main():
     )
     print("Initializing workers...")
     with multiprocessing.Pool(
-        processes=1,  # multiprocessing.cpu_count()
+        processes=2,  # multiprocessing.cpu_count()
         initializer=init_process,
         initargs=(prices,),
     ) as pool:
