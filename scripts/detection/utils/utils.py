@@ -5,6 +5,7 @@ import os
 import time
 import json
 import requests
+from datetime import datetime, timezone
 
 
 class colors:
@@ -14,38 +15,74 @@ class colors:
     END = "\033[0m"
 
 
-# def get_prices():
-#    return requests.get("https://api.coingecko.com/api/v3/coins/ethereum/market_chart/range?vs_currency=usd&from=1392577232&to="+str(int(time.time()))).json()["prices"]
 def get_prices():
+    """
+    Fetches historical Ethereum prices in USD with daily granularity starting with a specific date using CryptoCompare API.
+    Logs the response if an error occurs.
+    """
     try:
-        current_time = int(time.time())
-        one_year_ago = current_time - (365 * 24 * 60 * 60)  # 365 days ago
-        url = f"https://api.coingecko.com/api/v3/coins/ethereum/market_chart/range?vs_currency=usd&from={one_year_ago}&to={current_time}"
+        api_key = "45d559f2a0ca65c3cf827c9ffc4fc0337f6a83b3560fc4dd7eeaa35437935d27"  # Replace with your CryptoCompare API key
+        symbol = "ETH"
+        currency = "USD"
+
+        # Set the start date and calculate the number of days from start date to today
+        start_date = "2020-11-20 07:03:58"  # Start date in string format (Captures block 11300000, last block analyzed by Torres)
+        start_timestamp = int(
+            datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S").timestamp()
+        )
+        current_timestamp = int(time.time())
+
+        # Calculate the number of days to fetch data for
+        days_to_fetch = (current_timestamp - start_timestamp) // (24 * 60 * 60)
+
+        # Make the API request
+        url = f"https://min-api.cryptocompare.com/data/v2/histoday?fsym={symbol}&tsym={currency}&limit={days_to_fetch-1}&toTs={current_timestamp}&api_key={api_key}"
 
         response = requests.get(url)
         data = response.json()
 
-        if "prices" in data:
-            return data["prices"]
-        else:
-            print(
-                f"{colors.FAIL}Error: 'prices' key not found in API response.{colors.END}"
-            )
+        # Check for valid response
+        if data.get("Response") != "Success" or "Data" not in data.get("Data", {}):
+            print(f"API Response: {response.text}")
+            print("Error: Unable to fetch data from CryptoCompare.")
             return []
+
+        # Extract prices
+        prices = [
+            {"time": day["time"], "price": day["close"]} for day in data["Data"]["Data"]
+        ]
+
+        if not prices:
+            print("Error: No prices were retrieved from the API.")
+            return []
+
+        return prices
+
     except requests.RequestException as e:
-        print(f"{colors.FAIL}Error fetching prices: {e}{colors.END}")
+        print(f"Error fetching prices: {e}")
         return []
 
 
 def get_one_eth_to_usd(timestamp, prices):
-    timestamp *= 1000
-    one_eth_to_usd = prices[-1][1]
-    for index, _ in enumerate(prices):
-        if index < len(prices) - 1:
-            if prices[index][0] <= timestamp and timestamp <= prices[index + 1][0]:
-                return prices[index][1]
-    print("Could not find timestamp. Returning latest price instead.")
-    return one_eth_to_usd
+    if not prices or len(prices) == 0:
+        return 0  # Fallback for empty prices dataset
+
+    # Convert to midnight UTC
+    midnight_timestamp = int(
+        datetime.fromtimestamp(timestamp, timezone.utc)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+
+    # Look for exact match
+    for price_entry in prices:
+        if price_entry["time"] == midnight_timestamp:
+            return price_entry["price"]
+
+    print("Didnt find exact price, use nearest timestamp")
+    # Fallback: find the nearest timestamp
+    nearest_price = min(prices, key=lambda x: abs(x["time"] - midnight_timestamp))
+    return nearest_price["price"]
 
 
 def request_debug_trace(
@@ -57,6 +94,9 @@ def request_debug_trace(
     disable_memory=True,
     disable_storage=True,
 ):
+    """
+    Request a debug trace for a transaction using Geth's debug_traceTransaction.
+    """
     data, tracer = None, None
     if custom_tracer:
         with open(
